@@ -1,4 +1,6 @@
 import * as net from "net";
+import * as process from 'process';
+import fs from "fs";
 
 type Request = {
   httpVersion: string;
@@ -36,6 +38,17 @@ const server = net.createServer((socket) => {
         break;
       case '/user-agent':
         socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${request.userAgent.length}\r\n\r\n${request.userAgent}`)
+        break;
+      case `/files/${request.query}`: 
+        const directory = process.argv[3];
+        const filePath = `${directory}/${request.query}`;
+
+        if (fs.existsSync(filePath)) {
+          const content = fs.readFileSync(filePath)
+          socket.write(`HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${content.length}\r\n\r\n${content}`)
+        } else {
+          socket.write(Buffer.from(`HTTP/1.1 404 Not Found\r\n\r\n`));
+        }
         break;
       default:
         socket.write(Buffer.from(`HTTP/1.1 404 Not Found\r\n\r\n`));
