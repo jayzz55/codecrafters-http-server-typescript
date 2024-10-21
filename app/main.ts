@@ -1,5 +1,6 @@
 import * as net from "net";
 import * as process from 'process';
+import * as zlib from "zlib";
 import fs from "fs";
 
 type Request = {
@@ -62,12 +63,17 @@ type Response = {
   contentEncoding?: EncodingSchemeKeys[];
 }
 
-function buildResponse(data: Response): string {
-  const contentLengthString = (data.contentLength && data.contentLength > 0) ? `Content-Length: ${data.contentLength}\r\n` : '';
+function buildResponse(data: Response) {
   const contentTypeString = (data.contentType && data.contentType !== '') ? `Content-Type: ${data.contentType}\r\n` : '';
-  const contentEncodingString = (data.contentEncoding && data.contentEncoding.length > 0) ? `Content-Encoding: ${data.contentEncoding}\r\n` : '';
+  const contentEncodingString = (data.contentEncoding && data.contentEncoding.length > 0) ? `Content-Encoding: ${data.contentEncoding.join()}\r\n` : '';
+  const body =  (data.contentEncoding && data.body && data.contentEncoding.length > 0) ? zlib.gzipSync(data.body) : data.body ?? '';
+  const contentLengthString = (body && body.length > 0) ? `Content-Length: ${body.length}\r\n` : '';
 
-  return `HTTP/1.1 ${data.status}\r\n` + contentTypeString + contentLengthString + contentEncodingString + "\r\n" + `${data.body}`
+  const responseHeader = `HTTP/1.1 ${data.status}\r\n` + contentTypeString + contentLengthString + contentEncodingString + "\r\n"
+  return {
+    responseHeader: responseHeader,
+    responseBody: body
+  }
 }
 
 const server = net.createServer((socket) => {
@@ -78,45 +84,54 @@ const server = net.createServer((socket) => {
 
     switch (`${request.method}:${request.path}`) {
       case `${HttpMethod.Get}:/`:
-        socket.write(buildResponse({ status: HttpStatus.Ok }))
+        const { responseHeader } = buildResponse({ status: HttpStatus.Ok })
+        socket.write(responseHeader)
         break;
       case `${HttpMethod.Get}:/echo/${request.query}`: {
-        const contentLength = request.query.length;
         const body = request.query;
+        const { responseHeader, responseBody } = buildResponse({ status: HttpStatus.Ok, contentType: 'text/plain', contentEncoding, body })
 
-        socket.write(buildResponse({ status: HttpStatus.Ok, contentType: 'text/plain', contentLength, contentEncoding, body }))
+        socket.write(responseHeader)
+        socket.write(responseBody)
         break;
       }
       case `${HttpMethod.Get}:/user-agent`: {
-        const contentLength = request.userAgent.length;
         const body = request.userAgent;
+        const { responseHeader, responseBody } = buildResponse({ status: HttpStatus.Ok, contentType: 'text/plain', contentEncoding, body })
 
-        socket.write(buildResponse({ status: HttpStatus.Ok, contentType: 'text/plain', contentLength, contentEncoding, body }))
+        socket.write(responseHeader)
+        socket.write(responseBody)
         break;
       }
       case `${HttpMethod.Get}:/files/${request.query}`:  {
         const filePath = `${directory}/${request.query}`;
 
         if (fs.existsSync(filePath)) {
-          const content = fs.readFileSync(filePath)
-          const contentLength = content.length;
           const body = fs.readFileSync(filePath)
+          const { responseHeader, responseBody } = buildResponse({ status: HttpStatus.Ok, contentType: 'application/octet-stream', contentEncoding, body })
 
-          socket.write(buildResponse({ status: HttpStatus.Ok, contentType: 'application/octet-stream', contentLength, contentEncoding, body }))
+          socket.write(responseHeader)
+          socket.write(responseBody)
         } else {
-          socket.write(buildResponse({ status: HttpStatus.NotFound }))
+          const { responseHeader } = buildResponse({ status: HttpStatus.NotFound })
+          socket.write(responseHeader)
         }
         break;
       }
       case `${HttpMethod.Post}:/files/${request.query}`: {
         const filePath = `${directory}/${request.query}`;
         fs.writeFileSync(filePath, request.body);
-        socket.write(buildResponse({ status: HttpStatus.Created }))
+        const { responseHeader } = buildResponse({ status: HttpStatus.Created })
+
+        socket.write(responseHeader)
         break;
       }
-      default:
-        socket.write(buildResponse({ status: HttpStatus.NotFound }))
+      default: {
+        const { responseHeader } = buildResponse({ status: HttpStatus.NotFound })
+
+        socket.write(responseHeader)
         break;
+      }
     }
     socket.end();
   })
