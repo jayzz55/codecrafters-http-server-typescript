@@ -14,6 +14,12 @@ const server = net.createServer((socket) => {
       socket.write(Buffer.from(`HTTP/1.1 200 OK\r\n\r\n`));
     } else if (path === `/echo/${query}`) {
       socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${query.length}\r\n\r\n${query}`)
+    } else if (path === '/user-agent') {
+      const headers = request.split("\r\n")
+      const userAgentHeader = headers.find(header => header.includes('User-Agent')) 
+      const userAgent = userAgentHeader?.replace('User-Agent: ', '')
+
+      socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgent?.length}\r\n\r\n${userAgent}`)
     } else {
       socket.write(Buffer.from(`HTTP/1.1 404 Not Found\r\n\r\n`));
     };
