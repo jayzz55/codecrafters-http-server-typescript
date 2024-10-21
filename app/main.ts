@@ -8,7 +8,7 @@ type Request = {
   query: string;
   userAgent: string;
   body: string;
-  acceptEncoding: EncodingSchemeKeys | undefined;
+  acceptEncoding: EncodingSchemeKeys[];
 }
 
 const HttpMethod = {
@@ -41,8 +41,8 @@ function readRequest(data: Buffer): Request {
   const userAgentHeader = headers.find(header => header.includes('User-Agent')) 
   const userAgent = userAgentHeader?.replace('User-Agent: ', '') ?? ''
   const acceptEncodingHeader = headers.find(header => header.includes('Accept-Encoding')) 
-  const acceptEncodingString = acceptEncodingHeader?.replace('Accept-Encoding: ', '')
-  const acceptEncoding = (acceptEncodingString && capitalize(acceptEncodingString) in EncodingScheme) ? acceptEncodingString as 'gzip' : undefined
+  const acceptEncodingInputs = acceptEncodingHeader?.replace('Accept-Encoding: ', '').split(', ') ?? []
+  const acceptEncoding = acceptEncodingInputs.filter(encoding => (capitalize(encoding) in EncodingScheme)).map(encoding => encoding as EncodingSchemeKeys)
 
   return {
     method,
@@ -59,13 +59,13 @@ type Response = {
   contentLength?: number;
   contentType?: string;
   body?: string | Buffer;
-  contentEncoding?: EncodingSchemeKeys;
+  contentEncoding?: EncodingSchemeKeys[];
 }
 
 function buildResponse(data: Response): string {
   const contentLengthString = (data.contentLength && data.contentLength > 0) ? `Content-Length: ${data.contentLength}\r\n` : '';
   const contentTypeString = (data.contentType && data.contentType !== '') ? `Content-Type: ${data.contentType}\r\n` : '';
-  const contentEncodingString = (data.contentEncoding && capitalize(data.contentEncoding) in EncodingScheme) ? `Content-Encoding: ${data.contentEncoding}\r\n` : '';
+  const contentEncodingString = (data.contentEncoding && data.contentEncoding.length > 0) ? `Content-Encoding: ${data.contentEncoding}\r\n` : '';
 
   return `HTTP/1.1 ${data.status}\r\n` + contentTypeString + contentLengthString + contentEncodingString + "\r\n" + `${data.body}`
 }
