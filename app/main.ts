@@ -8,9 +8,16 @@ const server = net.createServer((socket) => {
   socket.on('data', (data) => {
     const request = data.toString();
     const path = request.split(' ')[1]
-    const response = path === '/' ? '200 OK' : '404 Not Found'
+    const query = path.split('/')[2];
 
-    socket.write(Buffer.from(`HTTP/1.1 ${response}\r\n\r\n`));
+    if (path === '/') {
+      socket.write(Buffer.from(`HTTP/1.1 200 OK\r\n\r\n`));
+    } else if (path === `/echo/${query}`) {
+      socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${query.length}\r\n\r\n${query}`)
+    } else {
+      socket.write(Buffer.from(`HTTP/1.1 404 Not Found\r\n\r\n`));
+    };
+
     socket.end();
   })
 });
